@@ -1,0 +1,50 @@
+[package]
+name = "screen-lock"
+version = "0.2.0"
+edition = "2021"
+
+[dependencies]
+slint = { version = "1.18", features = ["system-tray"] }
+slint-interpreter = "1.18"
+futures = "0.3"
+system-idle-time = "1.0"
+fs4 = "1"
+rfd = "0.17"
+dirs = "7"
+keyring = "3"
+ureq = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+rand = "0.8"
+chrono = "0.4"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Shell",
+    "Win32_System_Registry",
+    "Win32_Security",
+] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+x11rb = "0.13"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-graphics = "0.24"
+
+[build-dependencies]
+slint-build = "1.18"
+lucide-slint = "1.59"
+
+[features]
+default = []
+# 无 GPU 环境使用纯 CPU 渲染
+software-renderer = ["slint/renderer-winit-software"]
+
+[profile.release]
+strip = true
+lto = true

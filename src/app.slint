@@ -1,0 +1,637 @@
+// ScreenLock v2 — Slint UI (Material 3 style + lucide icons)
+import { Button, CheckBox, ComboBox, LineEdit, Slider, SpinBox, Switch } from "std-widgets.slint";
+import { IconDisplay, IconSet, Icon } from "@lucide";
+
+// ============ 共享数据结构 ============
+
+export struct WidgetData {
+    kind: string,
+    x: float,
+    y: float,
+    title: string,
+    subtitle: string,
+}
+
+export struct WidgetEdit {
+    index: int,
+    kind: string,
+    kind-label: string,
+    x: float,
+    y: float,
+    content: string,
+    hour12: bool,
+    date: bool,
+}
+
+// ============ 通用小组件 ============
+
+component Card inherits Rectangle {
+    in property <string> title;
+    width: 100%;
+    border-radius: 12px;
+    background: white;
+    border-width: 1px;
+    border-color: #CAC4D0;
+    VerticalLayout {
+        padding: 20px;
+        spacing: 14px;
+        Text { text: root.title; font-size: 15px; font-weight: 600; color: #1C1B1F; }
+        @children
+    }
+}
+
+component NavItem inherits Rectangle {
+    in property <string> label;
+    in property <Icon> icon;
+    in property <bool> active;
+    callback clicked();
+    height: 48px;
+    border-radius: 24px;
+    background: active ? #DEE1FF : transparent;
+    HorizontalLayout {
+        padding-left: 16px;
+        spacing: 12px;
+        Rectangle {
+            width: 24px; height: 100%;
+            IconDisplay {
+                icon: root.icon;
+                size: 20px;
+                stroke: active ? #4355B9 : #49454F;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+        Text { text: root.label; font-size: 14px; font-weight: active ? 600 : 400; color: active ? #001042 : #49454F; vertical-alignment: center; }
+    }
+    ta := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// ============ 设置窗口（图1风格） ============
+
+export component SettingsWindow inherits Window {
+    title: "ScreenLock 设置";
+    preferred-width: 880px;
+    preferred-height: 640px;
+    min-width: 760px;
+    min-height: 560px;
+    background: #F7F9FF;
+
+    // 数据（Rust 读写）
+    in-out property <string> pwd1;
+    in-out property <string> pwd2;
+    in-out property <int> idle-min: 10;
+    in-out property <string> uapis-key;
+    in-out property <bool> autostart;
+    in-out property <int> source-index: 0;
+    in-out property <string> folder;
+    in-out property <int> rotate-min: 10;
+    in-out property <int> order-index: 0;
+    in property <[WidgetEdit]> widget-list;
+    in property <bool> saved-msg: false;
+    in-out property <int> template-index: 0;
+
+    callback save-settings();
+    callback pick-folder();
+    callback add-widget(int);      // 模板 index
+    callback remove-widget(int);   // widget index
+    callback update-widget(int, float, float, string, bool, bool); // idx,x,y,content,hour12,date
+
+    property <int> page: 0;
+
+    HorizontalLayout {
+        spacing: 0px;
+
+        // ---- 左侧导航 ----
+        Rectangle {
+            width: 210px;
+            background: #EDF0F9;
+            border-width: 0px;
+            VerticalLayout {
+                padding-top: 18px;
+                padding-bottom: 18px;
+                padding-left: 12px;
+                padding-right: 12px;
+                spacing: 6px;
+                HorizontalLayout {
+                    spacing: 10px;
+                    padding-bottom: 16px;
+                    Rectangle {
+                        height: 100%;
+                        width: 22px;
+                        IconDisplay {
+                            icon: IconSet.Lock;
+                            size: 20px;
+                            stroke: #4355B9;
+                            y: (parent.height - self.height) / 2;
+                        }
+                    }
+                    Text { text: "设置"; font-size: 17px; font-weight: 700; color: #1C1B1F; vertical-alignment: center; }
+                }
+                NavItem { icon: IconSet.LockKeyhole; label: "解锁设置"; active: root.page == 0; clicked => { root.page = 0; } }
+                NavItem { icon: IconSet.Image; label: "壁纸设置"; active: root.page == 1; clicked => { root.page = 1; } }
+                NavItem { icon: IconSet.Puzzle; label: "锁屏组件"; active: root.page == 2; clicked => { root.page = 2; } }
+                NavItem { icon: IconSet.Info; label: "关于"; active: root.page == 3; clicked => { root.page = 3; } }
+                Rectangle { vertical-stretch: 1; }
+                Text { text: "NOCHE DE ALACRANES"; font-size: 9px; color: #b0bac6; horizontal-alignment: center; }
+                Text { text: "ScreenLock v2"; font-size: 10px; color: #8a97a8; horizontal-alignment: center; }
+            }
+        }
+
+        // ---- 右侧内容 ----
+        Rectangle {
+            vertical-stretch: 1;
+            background: #F7F9FF;
+            Flickable {
+                width: 100%;
+                height: 100%;
+                content-width: root.width - 210px;
+                VerticalLayout {
+                    padding: 24px;
+                    spacing: 18px;
+                    min-width: root.width - 260px;
+
+                    // 页0 解锁设置
+                    if root.page == 0: Card {
+                        title: "密码设置";
+                        Text { text: "新解锁密码（留空表示不修改）"; font-size: 13px; color: #475569; }
+                        LineEdit { text <=> root.pwd1; placeholder-text: "输入新密码"; }
+                        Text { text: "确认新密码"; font-size: 13px; color: #475569; }
+                        LineEdit { text <=> root.pwd2; placeholder-text: "再次输入新密码"; }
+                        Text { text: "无操作自动锁定（分钟）：当前 " + root.idle-min + " 分钟"; font-size: 13px; color: #475569; }
+                        SpinBox { value <=> root.idle-min; minimum: 1; maximum: 1440; width: 120px; }
+                        Text { text: "uapis 密钥（可选，免费接口可留空）"; font-size: 13px; color: #475569; }
+                        LineEdit { text <=> root.uapis-key; placeholder-text: "uapis-xxxxxxxx"; }
+                        HorizontalLayout {
+                            spacing: 10px;
+                            VerticalLayout {
+                                Text { text: "开机自启动"; font-size: 13px; color: #475569; }
+                                Text { text: "系统启动时自动运行本程序"; font-size: 11px; color: #8a94a6; }
+                            }
+                            Rectangle { horizontal-stretch: 1; }
+                            Switch { checked <=> root.autostart; }
+                        }
+                        Button {
+                            text: "保存设置";
+                            primary: true;
+                            width: 160px;
+                            clicked => { root.save-settings(); }
+                        }
+                    }
+
+                    // 页1 壁纸设置
+                    if root.page == 1: Card {
+                        title: "壁纸来源";
+                        Text { text: "锁屏背景图片来源"; font-size: 13px; color: #475569; }
+                        ComboBox {
+                            model: ["uapis 随机图片（acg/pc）", "本地文件夹轮换", "纯色背景（无图片）"];
+                            current-index <=> root.source-index;
+                        }
+                        if root.source-index == 1: HorizontalLayout {
+                            spacing: 10px;
+                            Text {
+                                text: root.folder == "" ? "（未选择文件夹）" : root.folder;
+                                font-size: 12px;
+                                color: #5a6678;
+                                horizontal-alignment: left;
+                                overflow: elide;
+                                vertical-alignment: center;
+                            }
+                            Rectangle { horizontal-stretch: 1; }
+                            Button { text: "选择文件夹…"; clicked => { root.pick-folder(); } }
+                        }
+                        Text { text: "轮换间隔（分钟，0 = 不轮换）：当前 " + root.rotate-min + " 分钟"; font-size: 13px; color: #475569; }
+                        SpinBox { value <=> root.rotate-min; minimum: 0; maximum: 1440; width: 120px; }
+                        Text { text: "轮换顺序"; font-size: 13px; color: #475569; }
+                        ComboBox {
+                            model: ["随机", "顺序"];
+                            current-index <=> root.order-index;
+                        }
+                        Button {
+                            text: "保存设置";
+                            primary: true;
+                            width: 160px;
+                            clicked => { root.save-settings(); }
+                        }
+                    }
+
+                    // 页2 组件管理
+                    if root.page == 2: Card {
+                        title: "锁屏组件";
+                        Text { text: "在锁屏上叠加显示的组件（位置为屏幕相对坐标 0~1）"; font-size: 12px; color: #8a94a6; }
+                        HorizontalLayout {
+                            spacing: 10px;
+                            ComboBox {
+                                model: ["屏保时钟", "屏保备忘录", "自定义文本"];
+                                current-index <=> root.template-index;
+                            }
+                            Button {
+                                text: "+ 添加组件";
+                                clicked => { root.add-widget(root.template-index); }
+                            }
+                        }
+                        for we in root.widget-list: card := Rectangle {
+                            height: we.kind == "clock" ? 150px : 170px;
+                            border-radius: 10px;
+                            background: #f8fafc;
+                            border-width: 1px;
+                            border-color: #CAC4D0;
+                            // 模型元素只读，编辑用局部属性，点"应用修改"回传
+                            property <float> lx: we.x;
+                            property <float> ly: we.y;
+                            property <string> lc: we.content;
+                            property <bool> lh: we.hour12;
+                            property <bool> ld: we.date;
+                            VerticalLayout {
+                                padding: 14px;
+                                spacing: 8px;
+                                HorizontalLayout {
+                                    spacing: 8px;
+                                    Text { text: "组件 · " + we.kind-label; font-size: 14px; font-weight: 600; color: #1C1B1F; }
+                                    Rectangle { horizontal-stretch: 1; }
+                                    Button {
+                                        text: "删除";
+                                        clicked => { root.remove-widget(we.index); }
+                                    }
+                                }
+                                HorizontalLayout {
+                                    spacing: 8px;
+                                    Text { text: "X"; font-size: 12px; color: #5a6678; vertical-alignment: center; }
+                                    Slider {
+                                        minimum: 0.0;
+                                        maximum: 1.0;
+                                        value <=> card.lx;
+                                    }
+                                    Text { text: "Y"; font-size: 12px; color: #5a6678; vertical-alignment: center; }
+                                    Slider {
+                                        minimum: 0.0;
+                                        maximum: 1.0;
+                                        value <=> card.ly;
+                                    }
+                                }
+                                if we.kind == "note" || we.kind == "text": LineEdit {
+                                    text <=> card.lc;
+                                    placeholder-text: we.kind == "note" ? "备忘录内容…" : "显示文本…";
+                                }
+                                if we.kind == "clock": HorizontalLayout {
+                                    spacing: 16px;
+                                    CheckBox { text: "12小时制"; checked <=> card.lh; }
+                                    CheckBox { text: "显示日期"; checked <=> card.ld; }
+                                }
+                                Button {
+                                    text: "应用修改";
+                                    clicked => {
+                                        root.update-widget(we.index, card.lx, card.ly, card.lc, card.lh, card.ld);
+                                    }
+                                }
+                            }
+                        }
+                        Button {
+                            text: "保存设置";
+                            primary: true;
+                            width: 160px;
+                            clicked => { root.save-settings(); }
+                        }
+                    }
+
+                    // 页3 关于
+                    if root.page == 3: Card {
+                        title: "关于 ScreenLock";
+                        Text { text: "ScreenLock v2.0 — 跨平台锁屏工具（Slint / Material 3）"; font-size: 13px; color: #1C1B1F; }
+                        Text { text: "无操作达到设定时间后，全部显示器进入全屏置顶锁屏，输入密码解锁。"; font-size: 12px; color: #49454F; wrap: word-wrap; }
+                        Text { text: "壁纸：uapis 随机图片 / 本地文件夹轮换 / 纯色，可选轮换间隔。"; font-size: 12px; color: #49454F; wrap: word-wrap; }
+                        Text { text: "锁屏组件：时钟、备忘录、自定义文本；也可在配置目录 widgets.d/*.json 中直接添加。"; font-size: 12px; color: #49454F; wrap: word-wrap; }
+                        Text { text: "自定义控件：把 .slint 文件放入配置目录的 custom-widgets/ 文件夹，即可在锁屏上渲染你自己写的控件（仓库 samples/ 有时钟与进度条示例）。"; font-size: 12px; color: #49454F; wrap: word-wrap; }
+                        Text { text: "锁屏界面按 Enter 输入密码；密码输错会提示重试。"; font-size: 12px; color: #49454F; wrap: word-wrap; }
+                    }
+                }
+            }
+        }
+    }
+
+    // 保存提示浮层
+    if root.saved-msg: Rectangle {
+        x: 0; y: 0; width: 100%; height: 100%;
+        TouchArea {}
+        Rectangle {
+            width: 260px; height: 90px;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            border-radius: 12px;
+            background: white;
+            border-width: 1px;
+            border-color: #CAC4D0;
+            VerticalLayout {
+                alignment: center;
+                padding: 16px;
+                Text { text: "设置已保存"; font-size: 15px; color: #2c3e50; horizontal-alignment: center; }
+                Text { text: "部分设置将在下次锁屏时生效"; font-size: 11px; color: #8a94a6; horizontal-alignment: center; }
+            }
+        }
+    }
+}
+
+// ============ 锁屏窗口 ============
+
+export component LockWindow inherits Window {
+    // Window 属性经根组件属性暴露给 Rust（生成 API 不直接提供 set_title 等）
+    in property <string> title-text: "ScreenLock";
+    title: title-text;
+    no-frame: true;
+    in property <bool> full-screen-flag: false;
+    full-screen: full-screen-flag;
+    in property <float> mon-w: 1280;
+    in property <float> mon-h: 720;
+    width: mon-w * 1px;
+    height: mon-h * 1px;
+    background: #0b0e14;
+
+    in property <image> wallpaper;
+    in property <image> blurred;
+    in-out property <bool> card-visible: false;
+    in property <[WidgetData]> widgets;
+    in property <bool> show-quit: false;
+    in-out property <string> pwd-text: "";
+    in-out property <string> error-msg: "";
+    in property <string> hint: "屏幕已锁定 · 按 Enter 输入解锁密码";
+    property <bool> reveal: false;
+
+    callback password-entered(string);
+    callback quit-requested();
+
+    public function open-card() {
+        root.error-msg = "";
+        root.reveal = false;
+        root.card-visible = true;
+        pwd-scope.focus();
+    }
+
+    public function close-card() {
+        root.card-visible = false;
+        root.pwd-text = "";
+        key-catcher.focus();
+    }
+
+    // 卡片隐藏时捕获按键：仅 Enter 弹出密码框
+    forward-focus: key-catcher;
+    key-catcher := FocusScope {
+        key-pressed(ev) => {
+            if (ev.text == Key.Return) {
+                root.open-card();
+            }
+            accept
+        }
+    }
+
+    // 背景层
+    Rectangle {
+        x: 0; y: 0; width: 100%; height: 100%;
+        Image {
+            source: root.card-visible ? root.blurred : root.wallpaper;
+            x: 0; y: 0; width: parent.width; height: parent.height;
+        }
+    }
+
+    // 组件层
+    for w in root.widgets: Rectangle {
+        x: root.width * w.x - self.width / 2;
+        y: root.height * w.y - self.height / 2;
+        width: w.kind == "note" ? 420px : w.kind == "clock" ? 640px : 500px;
+        height: w.kind == "note" ? 200px : w.kind == "clock" ? 200px : 100px;
+        if w.kind == "note": Rectangle {
+            width: 100%; height: 100%;
+            border-radius: 16px;
+            background: #ffffffe6;
+            VerticalLayout {
+                padding: 20px;
+                spacing: 8px;
+                alignment: center;
+                Text { text: w.title; font-size: 15px; font-weight: 700; color: #1C1B1F; }
+                Text { text: w.subtitle; font-size: 14px; color: #4a5568; wrap: word-wrap; }
+            }
+        }
+        if w.kind == "clock" || w.kind == "text": VerticalLayout {
+            alignment: center;
+            Text {
+                text: w.title;
+                font-size: w.kind == "clock" ? 110px : 36px;
+                font-weight: 300;
+                color: #f2f5f8;
+                horizontal-alignment: center;
+            }
+            if w.subtitle != "": Text {
+                text: w.subtitle;
+                font-size: 22px;
+                color: #d7dee6;
+                horizontal-alignment: center;
+            }
+        }
+    }
+
+    // 底部提示条（卡片未显示时）
+    if !root.card-visible: Rectangle {
+        y: parent.height - 64px;
+        width: 100%;
+        height: 64px;
+        background: #141a24b3;
+        Text {
+            text: root.hint;
+            font-size: 15px;
+            color: #e2e8f0;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            width: 100%;
+            height: 100%;
+        }
+    }
+
+    // 磨砂玻璃遮罩 + 密码区（清新浅蓝风格）
+    Rectangle {
+        x: 0; y: 0; width: 100%; height: 100%;
+        visible: root.card-visible;
+        opacity: root.card-visible ? 1.0 : 0.0;
+        animate opacity { duration: 250ms; }
+        Rectangle { background: #E8EAF6d9; width: 100%; height: 100%; }
+        VerticalLayout {
+            width: 440px;
+            spacing: 18px;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+
+            // 标题行
+            HorizontalLayout {
+                spacing: 10px;
+                alignment: center;
+                Rectangle {
+                    height: 100%;
+                    width: 22px;
+                    IconDisplay {
+                        icon: IconSet.Lock;
+                        size: 20px;
+                        stroke: #4355B9;
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
+                Text { text: "请输入解锁密码"; font-size: 17px; font-weight: 600; color: #1C1B1F; vertical-alignment: center; }
+            }
+
+            // 输入框（M3 outlined field：人形图标 + 真输入框 + 可见性切换）
+            Rectangle {
+                height: 56px;
+                border-radius: 14px;
+                background: white;
+                border-width: pwd-scope.has-focus ? 2px : 1px;
+                border-color: root.error-msg != "" ? #B3261E : (pwd-scope.has-focus ? #4355B9 : #79747E);
+                Rectangle {
+                    x: 16px;
+                    y: (parent.height - self.height) / 2;
+                    width: 20px;
+                    height: 100%;
+                    IconDisplay {
+                        icon: IconSet.User;
+                        size: 18px;
+                        stroke: pwd-scope.has-focus ? #4355B9 : #79747E;
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
+                pwd-scope := FocusScope {
+                    x: 48px;
+                    width: parent.width - 96px;
+                    height: 100%;
+                    forward-focus: pwd-input;
+                    key-pressed(ev) => {
+                        if (ev.text == Key.Escape) {
+                            root.close-card();
+                            accept
+                        } else {
+                            reject
+                        }
+                    }
+                    pwd-input := TextInput {
+                        width: 100%;
+                        height: 100%;
+                        text <=> root.pwd-text;
+                        input-type: root.reveal ? InputType.text : InputType.password;
+                        font-size: 15px;
+                        color: #1C1B1F;
+                        vertical-alignment: center;
+                        accepted => { root.password-entered(root.pwd-text); }
+                    }
+                    if root.pwd-text == "": Text {
+                        text: "请输入解锁密码";
+                        font-size: 15px;
+                        color: #9aa0a6;
+                        height: 100%;
+                        vertical-alignment: center;
+                    }
+                }
+                eye := TouchArea {
+                    width: 40px;
+                    height: 100%;
+                    x: parent.width - self.width - 12px;
+                    mouse-cursor: MouseCursor.pointer;
+                    clicked => { root.reveal = !root.reveal; }
+                }
+                Rectangle {
+                    width: 20px;
+                    x: parent.width - 52px;
+                    y: (parent.height - self.height) / 2;
+                    height: 100%;
+                    IconDisplay {
+                        icon: root.reveal ? IconSet.EyeOff : IconSet.Eye;
+                        size: 18px;
+                        stroke: #79747E;
+                        y: (parent.height - self.height) / 2;
+                    }
+                }
+            }
+
+            // 错误提示
+            if root.error-msg != "": Text {
+                text: root.error-msg;
+                font-size: 13px;
+                color: #B3261E;
+                horizontal-alignment: center;
+            }
+
+            // 解锁按钮（M3 filled button）
+            Rectangle {
+                height: 54px;
+                border-radius: 27px;
+                background: #4355B9;
+                Rectangle {
+                    width: 100%; height: 100%;
+                    border-radius: 27px;
+                    background: btn-ta.has-hover ? #FFFFFF26 : transparent;
+                    animate background { duration: 120ms; }
+                }
+                Text {
+                    text: "解 锁";
+                    font-size: 16px;
+                    font-weight: 600;
+                    color: white;
+                    width: 100%;
+                    height: 100%;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+                btn-ta := TouchArea {
+                    mouse-cursor: MouseCursor.pointer;
+                    clicked => { root.password-entered(root.pwd-text); }
+                }
+            }
+
+            Text {
+                text: "按 Enter 解锁 · Esc 取消";
+                font-size: 12px;
+                color: #7a8699;
+                horizontal-alignment: center;
+            }
+        }
+    }
+
+    // debug 强制退出按钮
+    if root.show-quit: Button {
+        text: "强制退出";
+        width: 110px;
+        x: parent.width - self.width - 18px;
+        y: parent.height - self.height - 18px;
+        clicked => { root.quit-requested(); }
+    }
+}
+
+// ============ 托盘 ============
+
+export component AppTray inherits SystemTrayIcon {
+    icon: @image-url("tray.png");
+    tooltip: "ScreenLock 屏幕锁定";
+
+    Menu {
+        MenuItem {
+            title: "设置…";
+            activated => { root.settings-requested(); }
+        }
+        MenuItem {
+            title: "立即锁定";
+            activated => { root.lock-now-requested(); }
+        }
+        MenuItem {
+            title: "开机自启动";
+            checkable: true;
+            checked: root.autostart-checked;
+            activated => { root.autostart-toggled(); }
+        }
+        MenuSeparator {}
+        MenuItem {
+            title: "退出";
+            activated => { root.quit-requested(); }
+        }
+    }
+
+    in property <bool> autostart-checked;
+    callback settings-requested();
+    callback lock-now-requested();
+    callback autostart-toggled();
+    callback quit-requested();
+}
