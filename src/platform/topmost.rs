@@ -18,8 +18,8 @@ fn enforce_windows(lock_title: &str, widget_title: &str) {
     use std::cell::RefCell;
     use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
     use windows::Win32::UI::WindowsAndMessaging::{
-        EnumWindows, GetWindowTextLengthW, GetWindowTextW, SetWindowPos, HWND_NOTOPMOST,
-        HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+        EnumWindows, GetWindowTextLengthW, GetWindowTextW, SetForegroundWindow, SetWindowPos,
+        HWND_NOTOPMOST, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
     };
 
     thread_local! {
@@ -58,6 +58,8 @@ fn enforce_windows(lock_title: &str, widget_title: &str) {
                     0,
                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
                 );
+                // 夺回焦点：防止程序弹窗等把键盘焦点从锁屏移走
+                let _ = SetForegroundWindow(*hwnd);
             }
         }
         for (hwnd, title) in &found {

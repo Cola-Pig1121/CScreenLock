@@ -26,6 +26,7 @@ Rust + [Slint](https://slint.dev)（Material 3 风格 + [lucide](https://lucide.
   示例见 [`samples/`](samples/)（时钟卡片、进度条卡片）。
 - **托盘常驻**：右键 → 设置 / 立即锁定 / 开机自启动 / 退出。
 - **开机自启动（可选）**：Windows 注册表 Run / macOS LaunchAgent / Linux XDG autostart，启动时以系统实际状态同步勾选。
+- **逃逸拦截（Windows）**：锁屏期间安装低级键盘钩子，吞掉 Alt/Win 键与 Ctrl+Esc——`Alt+Tab`、`Alt+F4`、`Win+Tab`、`Win+D`、`Win+L` 等均失效；锁屏与控件窗口同时忽略关闭请求（Alt+Tab 缩略图 × 无法关窗）。解锁后钩子自动卸载。
 - **uapis 密钥（可选）**：免费接口可不填；填写后保存在**系统密钥环**（Windows 凭据管理器 / macOS Keychain / Linux Secret Service），config.json 不落明文；也支持环境变量 `SCREENLOCK_UAPIS_KEY` 优先。请求时以 `x-api-key` 头发送。
 
 ## 平台支持
@@ -86,6 +87,6 @@ pkill -f screen-lock                   # macOS / Linux
 
 ## 已知边界
 
-- 「软锁定」：不拦截 `Ctrl+Alt+Del`、`Win+L` 等系统级热键。
+- 「软锁定」：`Ctrl+Alt+Del` 属于系统安全序列，任何用户态程序都无法拦截（可在该界面注销/重启，但无法看到桌面内容或直接操作其他程序）。macOS/Linux 未实现键盘钩子（需各自平台的事件拦截机制）。
 - 图片下载失败时锁屏正常显示（黑底），不影响解锁。
 - 自定义控件窗口 v1 固定放在主显示器；编译失败的文件跳过并在控制台输出诊断（debug 版可见）。

@@ -48,6 +48,8 @@ fn compile_one(path: &Path) -> Result<ComponentInstance, String> {
     let instance = def
         .create()
         .map_err(|e: slint::PlatformError| e.to_string())?;
+    // 忽略关闭请求：防止从 Alt+Tab 缩略图 × 掉控件窗口
+    instance.window().on_close_requested(|| slint::CloseRequestResponse::KeepWindowShown);
     // 统一窗口标题（经约定属性 win-title），供置顶 shim 识别
     let _ = instance.set_property("win-title", Value::String(widget_title().into()));
     Ok(instance)

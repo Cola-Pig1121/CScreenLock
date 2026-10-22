@@ -148,6 +148,7 @@ fn main() {
 
     {
         let mut b = app.borrow_mut();
+        platform::hook::uninstall();
         b.close_lock_windows();
         b.tray = None;
     }
@@ -248,9 +249,11 @@ impl App {
         self.start_wallpaper();
         self.push_widgets();
         platform::topmost::enforce(&lock_title(), &custom::widget_title());
+        platform::hook::install();
     }
 
     fn unlock(&mut self) {
+        platform::hook::uninstall();
         self.close_lock_windows();
         self.locked = false;
     }
@@ -495,6 +498,9 @@ impl App {
 // ---------- 回调接线 ----------
 
 fn bind_lock_callbacks(win: &LockWindow, app: &Weak<RefCell<App>>) {
+    // 忽略关闭请求：Alt+Tab 缩略图 × / Alt+F4 不能关掉锁屏
+    win.window()
+        .on_close_requested(|| slint::CloseRequestResponse::KeepWindowShown);
     let aw = app.clone();
     win.on_password_entered(move |text| {
         if let Some(a) = aw.upgrade() {
