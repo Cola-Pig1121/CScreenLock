@@ -107,6 +107,10 @@ struct App {
     extra_widgets: Vec<WidgetSpec>,
     locked: bool,
     lock_windows: Vec<LockWindow>,
+    /// 当前壁纸原始数据（API 模式下载按钮保存用）
+    current_image: Option<fetch::Decoded>,
+    /// 密码连续错误次数（达 3 次显示自定义提示）
+    fail_count: u32,
     /// 用户自定义控件（slint-interpreter 运行时实例）
     custom_widgets: Vec<slint_interpreter::ComponentInstance>,
     rotation: Option<wallpaper::Rotation>,
@@ -163,6 +167,8 @@ impl App {
             extra_widgets: config::load_extra_widgets(),
             locked: false,
             lock_windows: Vec::new(),
+            current_image: None,
+            fail_count: 0,
             custom_widgets: Vec::new(),
             rotation: None,
             settings: None,
@@ -189,6 +195,9 @@ impl App {
             return;
         }
         self.locked = true;
+        self.fail_count = 0;
+        let show_api =
+            wallpaper::effective_source(&self.cfg.wallpaper) == WallpaperSource::Api;
 
         let mons = platform::monitors::list();
         let targets: Vec<(i32, i32, i32, i32)> = if mons.is_empty() {
@@ -203,6 +212,7 @@ impl App {
                 win.set_title_text(SharedString::from(lock_title()));
                 win.set_full_screen_flag(true);
                 win.set_show_quit(show_quit);
+                win.set_show_api_actions(show_api);
                 bind_lock_callbacks(&win, &self.app);
                 if let Err(e) = win.show() {
                     eprintln!("[dbg] lock window show failed: {e}");
@@ -216,6 +226,7 @@ impl App {
                     win.set_mon_w(w as f32);
                     win.set_mon_h(h as f32);
                     win.set_show_quit(show_quit);
+                    win.set_show_api_actions(show_api);
                     bind_lock_callbacks(&win, &self.app);
                     if let Err(e) = win.show() {
                     eprintln!("[dbg] lock window show failed: {e}");
@@ -276,11 +287,35 @@ impl App {
         if config::verify(&self.cfg, input) {
             self.unlock();
         } else {
+            self.fail_count += 1;
+            let msg = if self.fail_count >= 3 && !self.cfg.fail_message.is_empty() {
+                self.cfg.fail_message.clone()
+            } else {
+                "密码错误，请重试".to_string()
+            };
             for win in &self.lock_windows {
                 win.set_pwd_text(SharedString::default());
-                win.set_error_msg(SharedString::from("密码错误，请重试"));
+                win.set_error_msg(SharedString::from(msg.as_str()));
             }
         }
+    }
+
+    /// 保存当前壁纸到图片目录（Pictures/ScreenLock，回退 Downloads）
+    fn download_current(&self) -> Result<(), String> {
+        let d = self.current_image.as_ref().ok_or("当前没有壁纸图片")?;
+        let dir = dirs::picture_dir()
+            .or_else(dirs::download_dir)
+            .ok_or("无法定位图片/下载目录")?
+            .join("ScreenLock");
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        let name = format!("wallpaper_{}.jpg", Local::now().format("%Y%m%d_%H%M%S"));
+        let path = dir.join(&name);
+        let img = image::RgbaImage::from_raw(d.w, d.h, d.rgba.clone())
+            .ok_or("图片数据无效")?;
+        image::DynamicImage::ImageRgba8(img)
+            .save(&path)
+            .map_err(|e| e.to_string())?;
+        Ok(())
     }
 
     // ---------- 壁纸 ----------
@@ -360,6 +395,7 @@ impl App {
             }
             None => (slint::Image::default(), slint::Image::default()),
         };
+        self.current_image = d;
         for win in &self.lock_windows {
             win.set_wallpaper(img.clone());
             win.set_blurred(blur.clone());
@@ -430,6 +466,7 @@ impl App {
         s.set_pwd2(SharedString::default());
         s.set_idle_min(self.cfg.idle_minutes as i32);
         s.set_uapis_key(SharedString::from(config::get_uapis_key()));
+        s.set_fail_msg(SharedString::from(self.cfg.fail_message.as_str()));
         s.set_autostart(self.cfg.autostart);
         s.set_source_index(source_index(self.cfg.wallpaper.source));
         s.set_folder(SharedString::from(self.cfg.wallpaper.folder.as_str()));
@@ -449,6 +486,7 @@ impl App {
         let pwd2 = s.get_pwd2().to_string();
         let idle = s.get_idle_min().max(1) as u64;
         let key = s.get_uapis_key().trim().to_string();
+        let fail_msg = s.get_fail_msg().trim().to_string();
         let auto = s.get_autostart();
         let src = index_source(s.get_source_index());
         let folder = s.get_folder().trim().to_string();
@@ -473,6 +511,7 @@ impl App {
             self.cfg.autostart = auto;
         }
         self.cfg.idle_minutes = idle;
+        self.cfg.fail_message = fail_msg;
         config::set_uapis_key(&mut self.cfg, &key)?;
         self.cfg.wallpaper = config::WallpaperConfig {
             source: src,
@@ -505,6 +544,38 @@ fn bind_lock_callbacks(win: &LockWindow, app: &Weak<RefCell<App>>) {
     win.on_password_entered(move |text| {
         if let Some(a) = aw.upgrade() {
             a.borrow_mut().handle_password(text.as_str());
+        }
+    });
+    let aw = app.clone();
+    win.on_refresh_requested(move || {
+        if let Some(a) = aw.upgrade() {
+            a.borrow_mut().next_wallpaper();
+        }
+    });
+    let aw = app.clone();
+    win.on_download_requested(move || {
+        let Some(a) = aw.upgrade() else { return };
+        let ok = {
+            let b = a.borrow();
+            b.download_current().is_ok()
+        };
+        if ok {
+            // 短暂把下载按钮切换为对勾反馈
+            let b = a.borrow();
+            for w in &b.lock_windows {
+                w.set_downloaded(true);
+            }
+            let aw2 = aw.clone();
+            let mut t = Timer::default();
+            t.start(TimerMode::SingleShot, Duration::from_millis(1500), move || {
+                if let Some(a) = aw2.upgrade() {
+                    let b = a.borrow();
+                    for w in &b.lock_windows {
+                        w.set_downloaded(false);
+                    }
+                }
+            });
+            std::mem::forget(t);
         }
     });
     let aw = app.clone();

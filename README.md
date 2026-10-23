@@ -10,7 +10,9 @@ Rust + [Slint](https://slint.dev)（Material 3 风格 + [lucide](https://lucide.
   - `本地文件夹轮换`：选择文件夹后按 随机/顺序 轮换其中的 jpg/png/webp；
   - `纯色背景`：不加载图片。
   - 轮换间隔可设 0~1440 分钟（0 = 不轮换）。
+  - **API 模式锁屏右下角**提供两个图标按钮：刷新（重新拉取随机图片）、下载（把当前壁纸保存到 `图片/ScreenLock/wallpaper_时间戳.jpg`，成功后短暂显示对勾）。
 - **密码解锁**：锁屏按 `Enter` → 背景切换为磨砂玻璃（预模糊壁纸 + 半透明叠加）并浮现 M3 风格密码输入框（真实输入框，光标闪烁、支持 IME，眼睛图标切换明文），输入密码按 `Enter` 或点击"解锁"。密码以加盐 SHA-256 哈希存储。
+- **连续失败提示**：设置中可配置提示文字；密码连续输错 3 次后，锁屏错误提示改为显示该自定义文字（留空则显示默认"密码错误，请重试"）。
 - **内置锁屏组件**（设置 → 锁屏组件）：「屏保时钟」「屏保备忘录」「自定义文本」模板，可添加多个、调整位置、编辑内容；也可在配置目录 `widgets.d/*.json` 声明式添加。
 - **自定义控件（写 Slint 代码）**：把 `.slint` 文件放入配置目录 `custom-widgets/`，下次锁屏由 `slint-interpreter` 运行时编译，作为独立置顶小窗渲染在锁屏上。组件约定：
   ```slint
@@ -58,6 +60,7 @@ UI 固定 Material 3 浅色样式（`material-light`），不随系统深色模�
   "password_salt": "<随机盐>",
   "autostart": false,
   "uapis_key": "",
+  "fail_message": "",
   "wallpaper": { "source": "api", "folder": "", "rotate_minutes": 10, "order": "random" },
   "widgets": [ { "kind": "clock", "x": 0.5, "y": 0.32, "props": { "hour12": "false", "date": "true" } } ]
 }

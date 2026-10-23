@@ -25,6 +25,31 @@ export struct WidgetEdit {
 
 // ============ 通用小组件 ============
 
+component IconBtn inherits Rectangle {
+    in property <Icon> icon;
+    callback clicked();
+    width: 44px;
+    height: 44px;
+    border-radius: 22px;
+    background: ta.has-hover ? #FFFFFF3D : #FFFFFF1A;
+    animate background { duration: 120ms; }
+    Rectangle {
+        width: 22px;
+        height: 100%;
+        x: (parent.width - self.width) / 2;
+        IconDisplay {
+            icon: root.icon;
+            size: 22px;
+            stroke: #F2F5F8;
+            y: (parent.height - self.height) / 2;
+        }
+    }
+    ta := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
 component Card inherits Rectangle {
     in property <string> title;
     width: 100%;
@@ -83,6 +108,7 @@ export component SettingsWindow inherits Window {
     in-out property <string> pwd2;
     in-out property <int> idle-min: 10;
     in-out property <string> uapis-key;
+    in-out property <string> fail-msg;
     in-out property <bool> autostart;
     in-out property <int> source-index: 0;
     in-out property <string> folder;
@@ -163,6 +189,8 @@ export component SettingsWindow inherits Window {
                         SpinBox { value <=> root.idle-min; minimum: 1; maximum: 1440; width: 120px; }
                         Text { text: "uapis 密钥（可选，免费接口可留空）"; font-size: 13px; color: #475569; }
                         LineEdit { text <=> root.uapis-key; placeholder-text: "uapis-xxxxxxxx"; }
+                        Text { text: "连续失败提示（密码连错 3 次时锁屏显示，留空禁用）"; font-size: 13px; color: #475569; }
+                        LineEdit { text <=> root.fail-msg; placeholder-text: "例如：别试了，我知道你不是本人"; }
                         HorizontalLayout {
                             spacing: 10px;
                             VerticalLayout {
@@ -352,6 +380,8 @@ export component LockWindow inherits Window {
     in-out property <bool> card-visible: false;
     in property <[WidgetData]> widgets;
     in property <bool> show-quit: false;
+    in property <bool> show-api-actions: false;
+    in property <bool> downloaded: false;
     in-out property <string> pwd-text: "";
     in-out property <string> error-msg: "";
     in property <string> hint: "屏幕已锁定 · 按 Enter 输入解锁密码";
@@ -359,6 +389,8 @@ export component LockWindow inherits Window {
 
     callback password-entered(string);
     callback quit-requested();
+    callback refresh-requested();
+    callback download-requested();
 
     public function open-card() {
         root.error-msg = "";
@@ -588,6 +620,21 @@ export component LockWindow inherits Window {
                 color: #7a8699;
                 horizontal-alignment: center;
             }
+        }
+    }
+
+    // API 模式：右下角刷新 / 下载图标按钮
+    if root.show-api-actions: HorizontalLayout {
+        x: parent.width - self.width - 18px;
+        y: parent.height - self.height - 84px;
+        spacing: 10px;
+        IconBtn {
+            icon: IconSet.RefreshCw;
+            clicked => { root.refresh-requested(); }
+        }
+        IconBtn {
+            icon: root.downloaded ? IconSet.Check : IconSet.Download;
+            clicked => { root.download-requested(); }
         }
     }
 

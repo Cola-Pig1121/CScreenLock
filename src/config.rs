@@ -93,6 +93,9 @@ pub struct Config {
     pub password_salt: String,
     pub autostart: bool,
     pub uapis_key: String,
+    /// 密码连续输错 3 次后显示的自定义提示文字（空 = 不启用，显示默认"密码错误"）
+    #[serde(default)]
+    pub fail_message: String,
     pub wallpaper: WallpaperConfig,
     pub widgets: Vec<WidgetSpec>,
 }
@@ -108,6 +111,7 @@ impl Default for Config {
             password_salt: String::new(),
             autostart: false,
             uapis_key: String::new(),
+            fail_message: String::new(),
             wallpaper: WallpaperConfig::default(),
             // 默认提供一个居中时钟组件（参照设计稿）
             widgets: vec![WidgetSpec {
