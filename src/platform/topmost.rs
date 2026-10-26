@@ -63,7 +63,8 @@ fn enforce_windows(lock_title: &str, widget_title: &str) {
             }
         }
         for (hwnd, title) in &found {
-            if title == widget_title {
+            // 兜底：未按约定声明 win-title 的控件窗口，标题为 winit 默认的 exe 路径
+            if title == widget_title || title.contains("screen-lock") {
                 // 先摘掉 topmost 再设回，强制移到 topmost 组最上层
                 // （对已是 topmost 的窗口直接设 TOPMOST 不会改变 Z 序）
                 let _ = SetWindowPos(
@@ -129,7 +130,7 @@ fn enforce_x11(lock_title: &str, widget_title: &str) {
             };
             let Ok(props) = props.reply() else { continue };
             let name = String::from_utf8_lossy(&props.value).to_string();
-            if name == lock_title || name == widget_title {
+            if name == lock_title || name == widget_title || name.contains("screen-lock") {
                 let _ =
                     conn.change_property32(PropMode::REPLACE, win, state, AtomEnum::ATOM, &[above]);
             }
