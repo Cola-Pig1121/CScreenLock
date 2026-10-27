@@ -31,7 +31,10 @@ component IconBtn inherits Rectangle {
     width: 44px;
     height: 44px;
     border-radius: 22px;
-    background: ta.has-hover ? #FFFFFF3D : #FFFFFF1A;
+    // 深色半透明底 + 白色图标：在浅色磨砂与深色壁纸上均有对比度
+    background: ta.has-hover ? #00000085 : #00000059;
+    border-width: 1px;
+    border-color: #FFFFFF4D;
     animate background { duration: 120ms; }
     Rectangle {
         width: 22px;
@@ -487,6 +490,9 @@ export component LockWindow inherits Window {
         Rectangle { background: #E8EAF6d9; width: 100%; height: 100%; }
         VerticalLayout {
             width: 440px;
+            // 关键：Slint 元素默认填满父元素，不显式收高的话
+            // 内容会被拉伸到整屏高度，且错误文字出现时布局跳动
+            height: self.preferred-height;
             spacing: 18px;
             x: (parent.width - self.width) / 2;
             y: (parent.height - self.height) / 2;
@@ -505,7 +511,7 @@ export component LockWindow inherits Window {
                         y: (parent.height - self.height) / 2;
                     }
                 }
-                Text { text: "请输入解锁密码"; font-size: 17px; font-weight: 600; color: #1C1B1F; vertical-alignment: center; }
+                Text { text: "请输入解锁密码"; font-size: 17px; font-weight: 600; color: #1C1B1F; letter-spacing: 1px; vertical-alignment: center; }
             }
 
             // 输入框（M3 outlined field：人形图标 + 真输入框 + 可见性切换）
@@ -553,8 +559,10 @@ export component LockWindow inherits Window {
                     if root.pwd-text == "": Text {
                         text: "请输入解锁密码";
                         font-size: 15px;
-                        color: #9aa0a6;
+                        color: #79747E;
                         height: 100%;
+                        width: 100%;
+                        horizontal-alignment: left;
                         vertical-alignment: center;
                     }
                 }
@@ -579,12 +587,17 @@ export component LockWindow inherits Window {
                 }
             }
 
-            // 错误提示
-            if root.error-msg != "": Text {
-                text: root.error-msg;
-                font-size: 13px;
-                color: #B3261E;
-                horizontal-alignment: center;
+            // 错误提示：固定占位高度，文字出现/消失不改变布局（防跳动）
+            Rectangle {
+                height: 18px;
+                Text {
+                    text: root.error-msg;
+                    font-size: 13px;
+                    color: #B3261E;
+                    width: 100%;
+                    horizontal-alignment: center;
+                    vertical-alignment: top;
+                }
             }
 
             // 解锁按钮（M3 filled button）
@@ -617,7 +630,8 @@ export component LockWindow inherits Window {
             Text {
                 text: "按 Enter 解锁 · Esc 取消";
                 font-size: 12px;
-                color: #7a8699;
+                color: #5f6368;
+                letter-spacing: 0.5px;
                 horizontal-alignment: center;
             }
         }
